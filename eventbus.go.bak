@@ -1,0 +1,126 @@
+package eventbus
+
+import (
+    "context"
+    "errors"
+    "fmt"
+    "reflect"
+)
+
+// EventBus is a command handler that handles commands by routing to the
+// registered CommandHandlers.
+type EventBus struct {
+    handlers   map[EventType][]AnyEventHandlerFunc
+}
+
+// NewEventBus creates a EventBus.
+func NewEventBus() *EventBus {
+    return &EventBus{
+        handlers: make(map[EventType][]AnyEventHandlerFunc),
+    }
+}
+
+
+// HandleEvent handles a event with a handler capable of handling it.
+func (h *EventBus) HandleCommand(ctx context.Context, ev Event) error {
+    if handlers, ok := h.handlers[ev.GetEventType()]; ok {
+        for _, handler := range handlers {
+            return handler(ctx, ev)
+        }
+    }
+
+    return ErrHandlerNotFound
+}
+
+// AddHandler adds a handler for a specific event.
+func (h *EventBus) AddHandler(handler EventHandlerFunc, evType EventType) error {
+    if _, ok := h.handlers[evType]; !ok {
+        h.handlers[evType] = make([]AnyEventHandlerFunc, 0)
+    }
+    if !reflect.TypeOf(handler).In(1).Implements( reflect.TypeOf((*Event)(nil)).Elem() ) {
+        panic(ErrHandlerNotEvent)
+    }
+
+    _handler := func(_ctx context.Context, _ev interface{}) error {
+        handler(_ctx, _ev.(Event))
+        return nil
+    }
+    h.handlers[evType] = append(h.handlers[evType], _handler)
+    return nil
+}
+
+// AddHandler adds a handler for a specific event.
+func (h *EventBus) addHandler(handler func(ctx context.Context, ev interface{}) error, evType EventType) error {
+    if _, ok := h.handlers[evType]; !ok {
+        h.handlers[evType] = make([]AnyEventHandlerFunc, 0)
+    }
+    if !reflect.TypeOf(handler).In(1).Implements( reflect.TypeOf((*Event)(nil)).Elem() ) {
+        panic(ErrHandlerNotEvent)
+    }
+
+    h.handlers[evType] = append(h.handlers[evType], handler)
+    return nil
+}
+
+
+// ErrHandlerNotFound is when no handler can be found.
+var ErrHandlerNotFound = errors.New("no handlers for event")
+
+// ErrHandlerNotFound is when no handler can be found.
+var ErrHandlerNotEvent = errors.New("the second param is event")
+
+// ErrHandlerAlreadySet is when a handler is already registered for a command.
+var ErrHandlerAlreadySet = errors.New("handler is already set")
+
+
+/*
+func Register(bus *EventBus,model interface{}) {
+    // 利用反射找到所有的Event
+    rval := reflect.ValueOf(model)
+    for i := 0; i < rval.NumMethod(); i++ {
+        method := reflect.TypeOf(rval.Method(i).Interface())
+        methodOutNum := method.NumOut()
+        methodInNum := method.NumIn()
+        if methodInNum == 2 && methodOutNum == 1 {
+            if method.In(0) != reflect.TypeOf((*context.Context)(nil)).Elem() {
+                p1 := method.In(0)
+                p2 := reflect.TypeOf((*context.Context)(nil))
+                fmt.Printf("%#v.%#v\n", p1.PkgPath(), p1.Name())
+                fmt.Printf("%#v.%#v\n", p2.Elem().PkgPath(), p2.Elem().Name())
+            }
+            if !method.In(1).Implements( reflect.TypeOf((*Event)(nil)).Elem() ) {
+                p1 := method.In(1)
+                p2 := reflect.TypeOf((*Event)(nil))
+                fmt.Println( p1.AssignableTo(p2) )
+                fmt.Println( p1.ConvertibleTo(p2) )
+
+                fmt.Println( p2.AssignableTo(p1) )
+                fmt.Println( p2.ConvertibleTo(p1) )
+
+                fmt.Println(p1.Implements(p2.Elem()))
+                fmt.Printf("%#v\n", p1.String())
+                fmt.Printf("%#v\n", p2.String())
+                fmt.Printf("%#v.%#v\n", p1.PkgPath(), p1.Name())
+                fmt.Printf("%#v.%#v\n", p2.PkgPath(), p2.Name())
+            }
+            if method.Out(0) != reflect.TypeOf((*error)(nil)).Elem() {
+                p1 := method.In(0)
+                p2 := reflect.TypeOf((*error)(nil))
+                fmt.Printf("%#v.%#v\n", p1.PkgPath(), p1.Name())
+                fmt.Printf("%#v.%#v\n", p2.Elem().PkgPath(), p2.Elem().Name())
+            }
+            if method.In(0) == reflect.TypeOf((*context.Context)(nil)).Elem() &&
+                method.In(1).Implements(reflect.TypeOf((*Event)(nil)).Elem()) &&
+                method.Out(0) == reflect.TypeOf((*error)(nil)).Elem() {
+                var tpe = method.In(1).Elem()
+                factory := func() Event {
+                    o := reflect.New(tpe)
+                    fmt.Printf("%#v", o)
+                    return reflect.New(tpe).Interface().(Event)
+                }
+                RegisterEvent(factory)
+                // bus.addHandler((AnyEventHandlerFunc)(rval.Method(i).Addr()), factory().GetEventType())
+            }
+        }
+    }
+}*/
